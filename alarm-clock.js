@@ -2,6 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     const alarmTimeInput = document.getElementById('alarmTime');
+    console.log("alarmTimeInput:", alarmTimeInput); // Cole esta linha AQUI
     const setAlarmButton = document.getElementById('setAlarmButton');
     const statusMessage = document.getElementById('status-message');
     const currentTimeDisplay = document.getElementById('current-time');
