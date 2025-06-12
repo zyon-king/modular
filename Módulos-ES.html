@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fluxo de Migração para Módulos ES e Import Dinâmico</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 20px;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1, h2, h3 {
+      color: #0056b3;
+    }
+    pre {
+      background: #eee;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    code {
+      font-family: 'Courier New', Courier, monospace;
+      background-color: #e0e0e0;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    strong {
+      color: #0056b3;
+    }
+    ul {
+      list-style-type: disc;
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Fluxo de Migração para Módulos ES e `import()` Dinâmico</h1>
+    <p>A migração de um script tradicional (como o seu `notificacoes.js` com `eval`) para um sistema baseado em <strong>Módulos ES (ESM) com <code>import()</code> dinâmico</strong> envolve um fluxo de trabalho claro.</p>
+
+    ---
+
+    <h2>1. Preparar o Script Original (`notificacoes.js`) para ser um Módulo ES</h2>
+    <ul>
+      <li><strong>Identifique o que precisa ser exportado:</strong> Qualquer função ou variável que seu código principal (ou outros módulos) precisar usar deve ser exportada.</li>
+      <li><strong>Adicione a palavra-chave <code>export</code>:</strong> Coloque <code>export</code> na frente das declarações de função/variável que você deseja tornar acessíveis de fora do módulo.</li>
+    </ul>
+
+    <h3>`notificacoes.js` (antes):</h3>
+    <pre><code class="language-javascript">
+function showCustomPopup(...) { ... }
+function isPermissionGranted() { ... }
+function showSuccess(message) { ... }
+// ... outras funções e variáveis
+const mensagemElement = document.getElementById('mensagem'); // Variável global
+function showMessage(text, className = '') { // Funções que usam a global
+  mensagemElement.innerHTML = text;
+  mensagemElement.className = className;
+}
+// ... etc.
+    </code></pre>
+
+    <h3>`notificacoes.js` (depois - como Módulo ES):</h3>
+    <pre><code class="language-javascript">
+// Funções utilitárias de popup (provavelmente não precisam ser exportadas,
+// pois showSuccess, showError, showConfirm as encapsulam)
+function createPopupElement() { /* ... */ } // Pode ser interna
+
+// Funções de popup que serão usadas externamente
+export function showCustomPopup(type, icon, title, message, buttons) {
+    // ... implementação
+    // Acessa document diretamente aqui (não precisa ser passado)
+}
+
+export function showConfirm(message, callbackSim, callbackNao) {
+    showCustomPopup('confirmation', '❓', 'Confirmação', message, [
+        { text: 'Sim', callback: callbackSim },
+        { text: 'Não', callback: callbackNao }
+    ]);
+}
+
+export function showSuccess(message) {
+    showCustomPopup('success', '✅', 'Sucesso', message, [
+        { text: 'OK', callback: null }
+    ]);
+}
+
+export function showError(message) {
+    showCustomPopup('error', '⚠️', 'Alerta', message, [
+        { text: 'OK', callback: null }
+    ]);
+}
+
+// Funções de permissão de notificação
+export function isNotificationSupported() {
+    return "Notification" in window;
+}
+
+export function isPermissionGranted() {
+    return Notification.permission === "granted";
+}
+
+export function isPermissionDenied() {
+    return Notification.permission === "denied";
+}
+
+export function isIncognitoMode() {
+    try {
+        window.localStorage.setItem('test', 'test');
+        window.localStorage.removeItem('test');
+        return false;
+    } catch (e) {
+        return true;
+    }
+}
+
+// A função askForNotificationPermissionAsync também precisa ser exportada
+export function askForNotificationPermissionAsync() {
+    return new Promise((resolve, reject) => {
+        if (!isNotificationSupported()) {
+            showError("Seu navegador não suporta notificações.");
+            return reject(new Error("Notificações não suportadas"));
+        }
+        // ... restante da lógica
+    });
+}
+
+// As funções initializeApp, runTests, domReady e a execução imediata (async () => { await domReady(); await initializeApp(); })();
+// provavelmente serão movidas para o seu script principal ou chamadas após o import.
+// O id 'mensagem' não existe mais no HTML, então showMessage deve ser removida ou adaptada.
+// Se 'mensagemElement' for uma div para mensagens de feedback, ela deve ser passada como parâmetro
+// para as funções ou as funções devem ter um escopo maior sobre o DOM (o que é ok para módulos UI).
+    </code></pre>
+
+    <ul>
+      <li><strong>Remova execuções automáticas:</strong> Remova a linha <code>(async () => { await domReady(); await initializeApp(); })();</code> do <code>notificacoes.js</code>. O código principal agora controlará quando essas funções são chamadas.</li>
+      <li><strong>Ajuste variáveis globais:</strong> Se o <code>notificacoes.js</code> dependia de variáveis globais que não fazem parte do seu módulo, você precisará passá-las como argumentos para as funções do módulo, ou o módulo terá que obtê-las do DOM por conta própria. Ex: <code>mensagemElement</code> não será mais global para o módulo; ele deve obter o elemento usando <code>document.getElementById</code> internamente.</li>
+    </ul>
+
+    ---
+
+    <h2>2. Modificar o Script HTML Principal</h2>
+    <ul>
+      <li><strong>Remova o <code>fetch</code> + <code>eval</code>:</strong> Isso não será mais necessário.</li>
+      <li><strong>Use <code>import()</code> dinâmico:</strong> No lugar do <code>fetch</code> e <code>eval</code>, você usará a sintaxe <code>import()</code>.</li>
+      <li><strong>Ajuste as chamadas das funções:</strong> As funções importadas não estarão mais no escopo global. Você precisará acessá-las através do objeto que o <code>import()</code> retorna.</li>
+    </ul>
+
+    <h3>Seu `script` na página HTML (antes):</h3>
+    <pre><code class="language-javascript">
+const jsURL = 'https://raw.githubusercontent.com/zyon-king/granular/6ef004bc7c9c5cc8f769447a7d74c2982eb6f834/notificacoes.js';
+fetch(jsURL)
+  .then(res => res.text())
+  .then(scriptText => {
+    eval(scriptText);
+    // ... seu setup
+  })
+  .catch(err => console.error('Erro ao carregar script:', err));
+    </code></pre>
+
+    <h3>Seu `script` na página HTML (depois - Módulo ES principal):</h3>
+    <pre><code class="language-html">
+&lt;script type="module"&gt; // Importante: usar type="module" no script principal
+const NOTIFICACOES_MODULE_URL = 'https://raw.githubusercontent.com/zyon-king/granular/6ef004bc7c9c5cc8f769447a7d74c2982eb6f834/notificacoes.js';
+
+// Funções para o dropdown (se não quiser que elas sejam um módulo separado)
+function setupDropdownNotifications(notificacoesModule) {
+  const itemSelector = document.getElementById('item-selector');
+  if (itemSelector) {
+    itemSelector.addEventListener('change', (event) => {
+      const selectedValue = event.target.value;
+      const selectedText = event.target.options[event.target.selectedIndex].textContent;
+
+      if (selectedValue === "") { return; }
+
+      if (notificacoesModule.isPermissionGranted()) { // Acesso via objeto do módulo
+        new Notification('Item Selecionado', {
+          body: `Você selecionou: ${selectedText}`,
+          icon: 'https://cdn.statically.io/gh/zyon-king/granular/main/favicon.ico'
+        });
+        notificacoesModule.showSuccess(`"${selectedText}" foi selecionado!`); // Acesso via objeto do módulo
+      } else {
+        notificacoesModule.showError("Permissão de notificação não concedida para exibir seleção de item.");
+      }
+    });
+  }
+}
+
+// Função assíncrona para carregar e configurar tudo
+async function initApp() {
+    try {
+        // Carrega o módulo de notificações dinamicamente
+        const notificacoesModule = await import(NOTIFICACOES_MODULE_URL);
+        console.log("Módulo de notificações carregado:", notificacoesModule);
+
+        // Agora, você pode usar as funções exportadas do módulo
+        // Por exemplo, chame a inicialização se houver uma:
+        // if (notificacoesModule.initializeApp) {
+        //     await notificacoesModule.initializeApp(); // Se initializeApp for exportada e assíncrona
+        // } else {
+        //     // Caso initializeApp não seja exportada ou não seja mais necessária
+        //     // pode chamar askForNotificationPermissionAsync diretamente
+        //     await notificacoesModule.askForNotificationPermissionAsync();
+        // }
+
+        // Configurar botões e dropdown usando as funções do módulo
+        document.getElementById('teste-notificacao').addEventListener('click', () => {
+            if (notificacoesModule.isPermissionGranted()) {
+                new Notification('Notificação de teste', {
+                    body: 'Essa é uma notificação de teste!',
+                });
+            } else {
+                notificacoesModule.askForNotificationPermissionAsync();
+            }
+        });
+
+        // Configurar o dropdown, passando o módulo como parâmetro
+        setupDropdownNotifications(notificacoesModule);
+
+    } catch (error) {
+        console.error('Erro ao carregar ou inicializar o módulo de notificações:', error);
+        // Se showError for a única coisa que você tem certeza que existe no global
+        // ou se você tiver uma lógica de erro fallback
+        // window.showError("Erro fatal ao carregar o sistema de notificações.");
+    }
+}
+
+// Inicia a aplicação após o DOM estar pronto
+// (A função domReady do seu script original pode ser recriada ou usar DOMContentLoaded)
+document.addEventListener("DOMContentLoaded", initApp);
+
+&lt;/script&gt;
+    </code></pre>
+
+    ---
+
+    <h2>3. Considerações Adicionais</h2>
+    <ul>
+      <li><strong><code>type="module"</code> no <code>&lt;script&gt;</code>:</strong> Isso é <strong>essencial</strong>. Sem ele, o navegador não tratará seu script principal como um módulo ES e <code>import()</code> não funcionará.</li>
+      <li><strong>CORS:</strong> Se o seu <code>notificacoes.js</code> for hospedado em um domínio diferente, o servidor que o hospeda precisará enviar os cabeçalhos CORS (<code>Access-Control-Allow-Origin</code>) apropriados para permitir que seu domínio o importe. O GitHub Raw geralmente funciona bem para isso.</li>
+      <li><strong>Caminhos relativos/absolutos:</strong> <code>import()</code> precisa de um caminho URL completo ou relativo para o módulo.</li>
+      <li><strong>Bundlers (opcional, mas recomendado para produção):</strong> Para projetos maiores, você usaria ferramentas como Webpack, Rollup ou Vite. Elas pegam seus módulos ES e os "empacotam" em arquivos otimizados para produção, cuidando de compatibilidade com navegadores mais antigos, minificação, etc. Para um único script como este, não é estritamente necessário, mas é a prática padrão em desenvolvimento moderno.</li>
+      <li><strong>Erro <code>Uncaught SyntaxError: Cannot use import statement outside a module</code>:</strong> Se você vir esse erro, provavelmente esqueceu o <code>type="module"</code> na sua tag <code>&lt;script&gt;</code> principal.</li>
+    </ul>
+
+    <p>Essa migração é um passo significativo em direção a uma arquitetura de código mais limpa, modular e escalável, que é a base do desenvolvimento web moderno.</p>
+  </div>
+</body>
+</html>
