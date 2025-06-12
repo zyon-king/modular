@@ -42,7 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
         alarmHour = hour;
         alarmMinute = minute;
         alarmSet = true;
-        statusMessage.textContent = `Alarme definido para ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        
+        const formattedAlarmTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        statusMessage.textContent = `Alarme definido para ${formattedAlarmTime}`;
         setAlarmButton.textContent = 'Alarme Definido (Clique para Cancelar)';
 
         // Limpa qualquer intervalo anterior para evitar múltiplos alarmes
@@ -54,6 +56,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Exibe a hora atual imediatamente
         updateCurrentTime();
+
+        // >>> NOVA LINHA AQUI: Dispara a notificação de confirmação <<<
+        if (typeof showDesktopNotification === 'function') {
+            showDesktopNotification("⏰ Alarme Definido!", `Seu alarme foi configurado para: ${formattedAlarmTime}`);
+        } else {
+            console.error("Função showDesktopNotification não encontrada. Verifique se desktop-notifications.js está carregado.");
+        }
     }
 
     // Função para disparar o alarme (chamando a notificação)
@@ -68,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.error("Função showDesktopNotification não encontrada. Verifique se desktop-notifications.js está carregado.");
         }
-
 
         // Opcional: Adicionar um som de alarme
         const audio = new Audio('https://www.soundjay.com/buttons/beep-07.mp3');
